@@ -21,6 +21,18 @@ Move **Limitbar.app** from `dist` into **Applications**, then open it. The first
 
 This is a local, ad-hoc-signed build, not a notarized release. To develop without packaging, run `swift run Limitbar` or open `Package.swift` in Xcode. Launch at login requires the packaged app.
 
+## Update an installed copy
+
+Quit Limitbar from its menu first. In your existing repository folder, run:
+
+```bash
+git pull --ff-only origin main
+./scripts/build-app.sh
+open dist
+```
+
+Drag the new **Limitbar.app** into **Applications**, choose **Replace**, and reopen it from Applications. Your connection settings and sign-ins are retained. Version 1.0.1 replaces the Codex placeholder with the OpenAI logo and gives Antigravity's Claude/GPT quotas a separate section with the Claude logo. The version is shown in Connections.
+
 ## Connect your accounts
 
 ### Codex
@@ -46,7 +58,7 @@ Enable **Antigravity / Argon** in Connections. Limitbar discovers `agy` in Homeb
 agy -p /usage --output-format json
 ```
 
-This is a usage report, not a model prompt. The desktop app does not have to remain open. Separate groups returned by the provider—such as **Gemini 4 Argon**, the shared Gemini pool, and Claude/GPT models—remain separate. Argon's quota is prioritized in the menu bar when present. Accounts without a five-hour allowance show “not reported” in that column.
+This is a usage report, not a model prompt. The desktop app does not have to remain open. **Gemini 4 Argon** and the shared Gemini pool appear in the Gemini section. **Claude/GPT models** appear in their own section with a Claude logo, labeled Google Antigravity to show where those allowances come from. Argon's quota is prioritized in the menu bar when present. Accounts without a five-hour allowance show “not reported” in that column.
 
 If authentication expires, open `agy` and sign in again. Refreshes do not intentionally launch a browser login. The app does not scrape browser cookies, inspect conversations, or copy provider credentials.
 
@@ -67,7 +79,7 @@ swift test
 ./scripts/build-app.sh  # macOS only
 ```
 
-`LimitbarCore` contains the parsers, read-only Codex client, and bounded CLI runner. Its 26 tests cover separate Argon quotas, weekly-only plans, missing/disabled quotas, reset parsing, authentication failures, redirect blocking, timeouts, cancellation, and bounded subprocess output. Fixtures are synthetic and contain no account credentials.
+`LimitbarCore` contains the parsers, read-only Codex client, and bounded CLI runner. Its tests cover separate Argon and Claude/GPT quotas, weekly-only plans, missing/disabled quotas, reset parsing, authentication failures, redirect blocking, timeouts, cancellation, and bounded subprocess output. Fixtures are synthetic and contain no account credentials.
 
 The native app uses SwiftUI, AppKit, Security, CryptoKit, and ServiceManagement. A macOS GitHub Actions workflow runs the tests, compiles and signs the app, and uploads the ZIP on pushes to `main` and pull requests. The workflow must run before treating the macOS build as verified.
 
@@ -76,3 +88,5 @@ Linux can build and test `LimitbarCore`; it cannot compile or run the macOS inte
 Provider interfaces can change. A rejected or unrecognized response produces an error, never fabricated quota. Codex windows other than five hours or seven days are currently not displayed.
 
 Protocol references: [OpenAI Codex](https://github.com/openai/codex), [Antigravity](https://antigravity.google/), and [CodexBar's Antigravity integration notes](https://github.com/steipete/CodexBar/blob/main/docs/antigravity.md). This project is independent of those products.
+
+The OpenAI/Codex and Claude vector marks are distributed with CodexBar; their source and MIT license are included in `Sources/Limitbar/Resources/ProviderLogos-LICENSE.txt` and in the packaged app's resource bundle. Product names and logos belong to their respective owners.

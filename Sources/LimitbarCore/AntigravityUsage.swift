@@ -38,11 +38,25 @@ public enum AntigravityUsage {
             }
             guard fiveHour != nil || weekly != nil else { continue }
             groups.append(QuotaGroup(id: "antigravity-\(index)", name: group.displayName ?? group.name ?? "Model quota",
-                                     fiveHour: fiveHour, weekly: weekly))
+                                     fiveHour: fiveHour, weekly: weekly, family: family(of: group)))
         }
         guard !groups.isEmpty else { throw UsageError.noQuota }
         // Preserve separate model names, including Gemini 4 Argon allowances.
         return ProviderUsage(id: .antigravity, subtitle: "Signed-in Antigravity account", updatedAt: now, groups: groups)
+    }
+
+    private static func family(of group: Group) -> QuotaFamily {
+        let names = [group.name, group.displayName].compactMap { $0 }
+        let buckets = group.buckets ?? []
+        let labels = names + buckets.flatMap { [$0.name, $0.displayName, $0.id, $0.bucketId].compactMap { $0 } }
+        let isThirdParty = labels.contains {
+            $0.range(of: #"\b(claude|gpt)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+        } || buckets.contains {
+            [$0.id, $0.bucketId].compactMap { $0?.lowercased() }.contains {
+                $0 == "3p" || $0.hasPrefix("3p-") || $0.hasPrefix("3p_")
+            }
+        }
+        return isThirdParty ? .claudeAndGPT : .gemini
     }
 
     private static func cadence(_ bucket: Bucket) -> String? {

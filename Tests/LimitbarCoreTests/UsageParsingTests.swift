@@ -63,6 +63,49 @@ final class UsageParsingTests: XCTestCase {
         XCTAssertEqual(result.summary?.usedPercent, 78)
         XCTAssertNotNil(result.groups[1].weekly?.resetsAt)
         XCTAssertEqual(result.groups[0].fiveHour?.usedPercent, 0)
+        XCTAssertEqual(result.geminiGroups.map(\.name), ["Gemini Flash / Pro", "Gemini 4 Argon"])
+        XCTAssertEqual(result.claudeAndGPTGroups.map(\.name), ["Claude and GPT models"])
+        XCTAssertEqual(try XCTUnwrap(result.claudeAndGPTGroups[0].fiveHour?.usedPercent), 6, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(result.claudeAndGPTGroups[0].weekly?.usedPercent), 32, accuracy: 0.0001)
+    }
+
+    func testClaudeGPTSectionRetainsQuotasWhenItIsTheOnlyGroup() throws {
+        let result = try AntigravityUsage.parse(data("""
+        {"status":"SUCCESS","command":{"name":"usage","data":{"groups":[
+          {"name":"Claude and GPT models","buckets":[
+            {"window":"5h","remaining_fraction":0.94},
+            {"window":"weekly","remaining_fraction":0.97}
+          ]}
+        ]}}}
+        """))
+        XCTAssertTrue(result.geminiGroups.isEmpty)
+        XCTAssertEqual(result.claudeAndGPTGroups.count, 1)
+        XCTAssertEqual(try XCTUnwrap(result.claudeAndGPTGroups[0].fiveHour?.usedPercent), 6, accuracy: 0.0001)
+        XCTAssertNil(result.summary, "The Gemini menu summary must not use Claude/GPT quotas.")
+    }
+
+    func testThirdPartyGroupsAreRecognizedFromSourceBucketIDs() throws {
+        let result = try AntigravityUsage.parse(data("""
+        {"status":"SUCCESS","command":{"name":"usage","data":{"groups":[
+          {"display_name":"Shared models","buckets":[{"id":"3p-5h","window":"5h","remaining_fraction":0.5}]},
+          {"name":"Gemini Models","buckets":[{"id":"gemini-5h","window":"5h","remaining_fraction":0.9}]}
+        ]}}}
+        """))
+        XCTAssertEqual(result.claudeAndGPTGroups.map(\.name), ["Shared models"])
+        XCTAssertEqual(result.geminiGroups.map(\.name), ["Gemini Models"])
+        XCTAssertEqual(try XCTUnwrap(result.summary?.usedPercent), 10, accuracy: 0.0001)
+    }
+
+    func testClaudeAndGPTNamesAreClassifiedCaseInsensitively() throws {
+        for name in ["cLaUdE models", "GPT-OSS", "Claude and GPT models"] {
+            let result = try AntigravityUsage.parse(data("""
+            {"status":"SUCCESS","command":{"name":"usage","data":{"groups":[
+              {"name":"\(name)","buckets":[{"window":"weekly","remaining_fraction":0.8}]}
+            ]}}}
+            """))
+            XCTAssertEqual(result.claudeAndGPTGroups.count, 1)
+            XCTAssertTrue(result.geminiGroups.isEmpty)
+        }
     }
 
     func testWeeklyOnlyStarterDoesNotInventSessionLimit() throws {

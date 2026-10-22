@@ -66,19 +66,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func updateStatus() {
-        let pieces = ProviderID.allCases.map { id -> String in
-            let symbol = id == .codex ? "⌘" : "✦"
+        let summaries = ProviderID.allCases.map { id -> (ProviderID, String) in
+            let text: String
             switch model.states[id] ?? .disconnected {
-            case .loaded(let usage): return "\(symbol) \(usage.summary?.percentage ?? "—")"
-            case .loading: return "\(symbol) ···"
-            case .failed: return "\(symbol) !"
-            case .disconnected: return "\(symbol) —"
+            case .loaded(let usage): text = usage.summary?.percentage ?? "—"
+            case .loading: text = "···"
+            case .failed: text = "!"
+            case .disconnected: text = "—"
             }
+            return (id, text)
         }
-        statusItem.button?.attributedTitle = NSAttributedString(string: pieces.joined(separator: "  "), attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .medium),
-            .foregroundColor: NSColor.labelColor,
-        ])
+        statusItem.button?.title = ""
+        statusItem.button?.image = ProviderArtwork.menuBarImage(summaries: summaries)
         statusItem.button?.toolTip = "Limitbar · Codex and Antigravity usage"
         statusItem.button?.setAccessibilityLabel("Limitbar. " + ProviderID.allCases.map { id in
             "\(id.title): \(model.states[id]?.usage?.summary?.percentage ?? "unavailable")"

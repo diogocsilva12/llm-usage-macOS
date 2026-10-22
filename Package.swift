@@ -9,7 +9,7 @@ var targets: [Target] = [
 
 #if os(macOS)
 products.append(.executable(name: "Limitbar", targets: ["Limitbar"]))
-targets.append(.executableTarget(name: "Limitbar", dependencies: ["LimitbarCore"]))
+targets.append(.executableTarget(name: "Limitbar", dependencies: ["LimitbarCore"], resources: [.process("Resources")]))
 #endif
 
 let package = Package(

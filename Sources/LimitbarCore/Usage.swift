@@ -21,17 +21,23 @@ public struct UsageWindow: Equatable, Sendable {
     public var percentage: String { "\(Int(usedPercent.rounded()))%" }
 }
 
+public enum QuotaFamily: Equatable, Sendable {
+    case gemini, claudeAndGPT
+}
+
 public struct QuotaGroup: Equatable, Identifiable, Sendable {
     public let id: String
     public let name: String
     public let fiveHour: UsageWindow?
     public let weekly: UsageWindow?
+    public let family: QuotaFamily?
 
-    public init(id: String, name: String, fiveHour: UsageWindow?, weekly: UsageWindow?) {
+    public init(id: String, name: String, fiveHour: UsageWindow?, weekly: UsageWindow?, family: QuotaFamily? = nil) {
         self.id = id
         self.name = name
         self.fiveHour = fiveHour
         self.weekly = weekly
+        self.family = family
     }
 }
 
@@ -48,12 +54,15 @@ public struct ProviderUsage: Equatable, Identifiable, Sendable {
         self.groups = groups
     }
     public var summary: UsageWindow? {
+        let groups = id == .antigravity ? geminiGroups : self.groups
         if id == .antigravity,
            let argon = groups.first(where: { $0.name.localizedCaseInsensitiveContains("argon") }) {
             return argon.weekly ?? argon.fiveHour
         }
         return groups.first?.fiveHour ?? groups.first?.weekly
     }
+    public var geminiGroups: [QuotaGroup] { groups.filter { $0.family != .claudeAndGPT } }
+    public var claudeAndGPTGroups: [QuotaGroup] { groups.filter { $0.family == .claudeAndGPT } }
     public func isStale(at now: Date = Date()) -> Bool { now.timeIntervalSince(updatedAt) > 15 * 60 }
 }
 

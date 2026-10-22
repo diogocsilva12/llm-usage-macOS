@@ -99,7 +99,12 @@ struct UsagePanel: View {
     private var contentHeight: CGFloat {
         let height = ProviderID.allCases.reduce(CGFloat(0)) { total, id in
             if let usage = model.states[id]?.usage {
-                return total + 63 + CGFloat(max(0, usage.groups.count - 1)) * 56
+                let sections = id == .antigravity
+                    ? (usage.geminiGroups.isEmpty ? 0 : 1) + (usage.claudeAndGPTGroups.isEmpty ? 0 : 1)
+                    : 1
+                return total + CGFloat(sections) * 63
+                    + CGFloat(max(0, usage.groups.count - sections)) * 56
+                    + CGFloat(max(0, sections - 1)) * 29
             }
             if case .failed? = model.states[id] { return total + 106 }
             return total + 65
@@ -111,44 +116,24 @@ struct UsagePanel: View {
     private func provider(_ id: ProviderID) -> some View {
         switch model.states[id] ?? .disconnected {
         case .loaded(let usage):
-            let ordered = orderedGroups(usage)
-            VStack(spacing: 11) {
-                if let first = ordered.first {
-                    HStack(alignment: .top, spacing: 12) {
-                        HStack(alignment: .top, spacing: 8) {
-                            ProviderMark(id: id).frame(width: 19, height: 21)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(id == .antigravity && first.name.localizedCaseInsensitiveContains("argon") ? "Argon" : id.title)
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text(id == .antigravity ? (first.name.localizedCaseInsensitiveContains("argon") ? "Google Antigravity" : first.name) : usage.subtitle)
-                                    .font(.system(size: 11)).foregroundStyle(PanelStyle.secondary)
-                                    .lineLimit(1).help(usage.subtitle)
-                                TimelineView(.periodic(from: .now, by: 30)) { timeline in
-                                    Text(updatedLabel(usage.updatedAt, now: timeline.date))
-                                        .font(.system(size: 10.5))
-                                        .foregroundStyle(usage.isStale(at: timeline.date) ? Color.orange : PanelStyle.muted)
-                                }
-                            }
-                        }.frame(width: PanelStyle.labelWidth, alignment: .leading)
-                        MetricCell(window: first.fiveHour, weekly: false)
-                        MetricCell(window: first.weekly, weekly: true)
+            if id == .antigravity {
+                let gemini = orderedGeminiGroups(usage.geminiGroups)
+                VStack(spacing: 0) {
+                    if let first = gemini.first {
+                        let hasArgon = first.name.localizedCaseInsensitiveContains("argon")
+                        usageSection(usage, groups: gemini, title: hasArgon ? "Argon" : "Antigravity",
+                                     subtitle: hasArgon ? "Google Antigravity" : first.name, logo: .antigravity)
                     }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("\(id.title), \(first.name)")
-                }
-                ForEach(Array(ordered.dropFirst())) { group in
-                    HStack(alignment: .top, spacing: 12) {
-                        Text(group.name)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(PanelStyle.secondary)
-                            .lineLimit(2)
-                            .padding(.leading, 27)
-                            .frame(width: PanelStyle.labelWidth, alignment: .leading)
-                            .help(group.name)
-                        MetricCell(window: group.fiveHour, weekly: false, compact: true)
-                        MetricCell(window: group.weekly, weekly: true, compact: true)
+                    if !usage.claudeAndGPTGroups.isEmpty {
+                        if !gemini.isEmpty {
+                            Rectangle().fill(PanelStyle.line).frame(height: 1).padding(.vertical, 14)
+                        }
+                        usageSection(usage, groups: usage.claudeAndGPTGroups, title: "Claude & GPT",
+                                     subtitle: "Google Antigravity", logo: .claude)
                     }
                 }
+            } else {
+                usageSection(usage, groups: usage.groups, title: id.title, subtitle: usage.subtitle, logo: .codex)
             }
         case .disconnected:
             connectionState(id, message: id == .codex ? "Use your ChatGPT sign-in" : "Argon, Gemini & shared limits") {
@@ -165,6 +150,42 @@ struct UsagePanel: View {
                 }
                 Text(message).font(.system(size: 11)).foregroundStyle(PanelStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.leading, 27)
+            }
+        }
+    }
+
+    private func usageSection(_ usage: ProviderUsage, groups: [QuotaGroup], title: String,
+                              subtitle: String, logo: ProviderLogo) -> some View {
+        VStack(spacing: 11) {
+            if let first = groups.first {
+                HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .top, spacing: 8) {
+                        ProviderMark(logo: logo).frame(width: 19, height: 21)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title).font(.system(size: 14, weight: .semibold))
+                            Text(subtitle).font(.system(size: 11)).foregroundStyle(PanelStyle.secondary)
+                                .lineLimit(1).help(subtitle)
+                            TimelineView(.periodic(from: .now, by: 30)) { timeline in
+                                Text(updatedLabel(usage.updatedAt, now: timeline.date))
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(usage.isStale(at: timeline.date) ? Color.orange : PanelStyle.muted)
+                            }
+                        }
+                    }.frame(width: PanelStyle.labelWidth, alignment: .leading)
+                    MetricCell(window: first.fiveHour, weekly: false)
+                    MetricCell(window: first.weekly, weekly: true)
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("\(title), \(first.name), \(subtitle)")
+            }
+            ForEach(Array(groups.dropFirst())) { group in
+                HStack(alignment: .top, spacing: 12) {
+                    Text(group.name).font(.system(size: 11.5)).foregroundStyle(PanelStyle.secondary)
+                        .lineLimit(2).padding(.leading, 27)
+                        .frame(width: PanelStyle.labelWidth, alignment: .leading).help(group.name)
+                    MetricCell(window: group.fiveHour, weekly: false, compact: true)
+                    MetricCell(window: group.weekly, weekly: true, compact: true)
+                }
             }
         }
     }
@@ -192,10 +213,9 @@ struct UsagePanel: View {
         }.buttonStyle(MenuRowStyle())
     }
 
-    private func orderedGroups(_ usage: ProviderUsage) -> [QuotaGroup] {
-        guard usage.id == .antigravity else { return usage.groups }
-        let argon = usage.groups.filter { $0.name.localizedCaseInsensitiveContains("argon") }
-        return argon + usage.groups.filter { !$0.name.localizedCaseInsensitiveContains("argon") }
+    private func orderedGeminiGroups(_ groups: [QuotaGroup]) -> [QuotaGroup] {
+        let argon = groups.filter { $0.name.localizedCaseInsensitiveContains("argon") }
+        return argon + groups.filter { !$0.name.localizedCaseInsensitiveContains("argon") }
     }
 
     private func updatedLabel(_ date: Date, now: Date) -> String {
@@ -252,20 +272,26 @@ struct MetricCell: View {
 }
 
 struct ProviderMark: View {
-    let id: ProviderID
+    let logo: ProviderLogo
     var monochrome = false
 
     var body: some View {
-        Group {
-            if id == .antigravity {
-                Image(systemName: "sparkle").resizable().scaledToFit()
-                    .foregroundStyle(monochrome ? Color.primary : Color(red: 0.58, green: 0.58, blue: 0.98))
-            } else {
-                Image(systemName: "command").resizable().scaledToFit()
-                    .foregroundStyle(monochrome ? Color.primary : Color(red: 0.78, green: 0.85, blue: 0.99))
-            }
-        }.accessibilityHidden(true)
+        Image(nsImage: ProviderArtwork.image(for: logo)).resizable().renderingMode(.template).scaledToFit()
+            .foregroundStyle(monochrome ? Color.primary : tint)
+            .accessibilityHidden(true)
     }
+
+    private var tint: Color {
+        switch logo {
+        case .codex: return Color(red: 0.78, green: 0.85, blue: 0.99)
+        case .antigravity: return Color(red: 0.58, green: 0.58, blue: 0.98)
+        case .claude: return Color(red: 0.88, green: 0.53, blue: 0.38)
+        }
+    }
+}
+
+extension ProviderMark {
+    init(id: ProviderID) { self.init(logo: ProviderLogo(id)) }
 }
 
 private struct VisualEffect: NSViewRepresentable {

@@ -55,7 +55,8 @@ struct ConnectionsView: View {
             Text("Refreshes every 5 minutes and when your Mac wakes. Missing limits stay blank. No analytics, credential copies, or model prompts.")
                 .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Text("Limitbar 1.0").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text("Limitbar \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development")")
+                    .font(.system(size: 11)).foregroundStyle(.tertiary)
                 Spacer()
                 Button("Refresh Now") { model.refresh() }.disabled(model.isRefreshing)
             }
