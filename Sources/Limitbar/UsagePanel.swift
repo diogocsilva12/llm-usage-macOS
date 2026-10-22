@@ -105,6 +105,7 @@ struct UsagePanel: View {
                 return total + CGFloat(sections) * 63
                     + CGFloat(max(0, usage.groups.count - sections)) * 56
                     + CGFloat(max(0, sections - 1)) * 29
+                    + (id == .codex ? (usage.resetCredits.map { $0.availableCount > 0 } == true ? 43 : 25) : 0)
             }
             if case .failed? = model.states[id] { return total + 106 }
             return total + 65
@@ -133,7 +134,10 @@ struct UsagePanel: View {
                     }
                 }
             } else {
-                usageSection(usage, groups: usage.groups, title: id.title, subtitle: usage.subtitle, logo: .codex)
+                VStack(alignment: .leading, spacing: 9) {
+                    usageSection(usage, groups: usage.groups, title: id.title, subtitle: usage.subtitle, logo: .codex)
+                    ResetCreditsRow(credits: usage.resetCredits)
+                }
             }
         case .disconnected:
             connectionState(id, message: id == .codex ? "Use your ChatGPT sign-in" : "Argon, Gemini & shared limits") {
@@ -221,6 +225,35 @@ struct UsagePanel: View {
     private func updatedLabel(_ date: Date, now: Date) -> String {
         let minutes = max(0, Int(now.timeIntervalSince(date) / 60))
         return minutes == 0 ? "updated just now" : "updated \(minutes) min ago"
+    }
+}
+
+private struct ResetCreditsRow: View {
+    let credits: ResetCredits?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 10.5)).frame(width: 12).padding(.top, 1)
+                VStack(alignment: .leading, spacing: 3) {
+                    if let credits {
+                        Text(credits.needsRefresh(at: timeline.date) ? "Reset availability needs refresh" : credits.availableText)
+                            .font(.system(size: 11.5))
+                        if let expiration = credits.expirationText(at: timeline.date) {
+                            Text(expiration).font(.system(size: 10.5)).foregroundStyle(PanelStyle.muted)
+                        }
+                    } else {
+                        Text("Reset availability not reported").font(.system(size: 10.5))
+                            .help("The account did not return reset-credit information. Refresh to try again.")
+                    }
+                }
+            }
+            .foregroundStyle(PanelStyle.secondary)
+            .padding(.leading, 27)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 

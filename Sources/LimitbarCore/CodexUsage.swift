@@ -35,7 +35,14 @@ public enum CodexUsage {
             request.setValue(account, forHTTPHeaderField: "ChatGPT-Account-Id")
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Limitbar/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Limitbar/1.0.2", forHTTPHeaderField: "User-Agent")
+        return request
+    }
+
+    public static func resetCreditsRequest(credentials: CodexCredentials) -> URLRequest {
+        var request = self.request(credentials: credentials)
+        request.url = URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")!
+        request.timeoutInterval = 8
         return request
     }
 
@@ -56,7 +63,11 @@ public enum CodexUsage {
         guard !groups.isEmpty else { throw UsageError.noQuota }
         let plan = payload.plan_type.map { $0.replacingOccurrences(of: "_", with: " ").capitalized }
         return ProviderUsage(id: .codex, subtitle: plan.map { "ChatGPT · \($0)" } ?? "ChatGPT account",
-                             updatedAt: now, groups: groups)
+                             updatedAt: now, groups: groups,
+                             resetCredits: payload.rate_limit_reset_credits.flatMap { summary in
+                                 guard summary.available_count >= 0 else { return nil }
+                                 return ResetCredits(availableCount: summary.available_count, nextExpiresAt: nil, fullResets: false)
+                             })
     }
 
     private static func group(_ limits: Limits, id: String, name: String) throws -> QuotaGroup? {
@@ -82,7 +93,21 @@ public enum CodexUsage {
         let plan_type: String?
         let rate_limit: Limits?
         let additional_rate_limits: [Additional]?
+        let rate_limit_reset_credits: ResetSummary?
+
+        private enum CodingKeys: String, CodingKey {
+            case plan_type, rate_limit, additional_rate_limits, rate_limit_reset_credits
+        }
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            plan_type = try container.decodeIfPresent(String.self, forKey: .plan_type)
+            rate_limit = try container.decodeIfPresent(Limits.self, forKey: .rate_limit)
+            additional_rate_limits = try container.decodeIfPresent([Additional].self, forKey: .additional_rate_limits)
+            // Optional reset metadata must never make otherwise valid usage unreadable.
+            rate_limit_reset_credits = try? container.decodeIfPresent(ResetSummary.self, forKey: .rate_limit_reset_credits)
+        }
     }
+    private struct ResetSummary: Decodable { let available_count: Int }
     private struct Additional: Decodable { let limit_name: String?; let rate_limit: Limits }
     private struct Limits: Decodable { let primary_window: Window?; let secondary_window: Window? }
     private struct Window: Decodable {

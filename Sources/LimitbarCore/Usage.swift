@@ -46,12 +46,17 @@ public struct ProviderUsage: Equatable, Identifiable, Sendable {
     public let subtitle: String
     public let updatedAt: Date
     public let groups: [QuotaGroup]
+    public let resetCredits: ResetCredits?
 
-    public init(id: ProviderID, subtitle: String, updatedAt: Date, groups: [QuotaGroup]) {
+    public init(id: ProviderID, subtitle: String, updatedAt: Date, groups: [QuotaGroup], resetCredits: ResetCredits? = nil) {
         self.id = id
         self.subtitle = subtitle
         self.updatedAt = updatedAt
         self.groups = groups
+        self.resetCredits = resetCredits
+    }
+    public func withResetCredits(_ credits: ResetCredits) -> ProviderUsage {
+        ProviderUsage(id: id, subtitle: subtitle, updatedAt: updatedAt, groups: groups, resetCredits: credits)
     }
     public var summary: UsageWindow? {
         let groups = id == .antigravity ? geminiGroups : self.groups

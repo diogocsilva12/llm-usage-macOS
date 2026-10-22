@@ -31,7 +31,7 @@ git pull --ff-only origin main
 open dist
 ```
 
-Drag the new **Limitbar.app** into **Applications**, choose **Replace**, and reopen it from Applications. Your connection settings and sign-ins are retained. Version 1.0.1 replaces the Codex placeholder with the OpenAI logo and gives Antigravity's Claude/GPT quotas a separate section with the Claude logo. The version is shown in Connections.
+Drag the new **Limitbar.app** into **Applications**, choose **Replace**, and reopen it from Applications. Your connection settings and sign-ins are retained. Version 1.0.2 adds the available Codex resets and their next expiration below the usage bars. The version is shown in Connections.
 
 ## Connect your accounts
 
@@ -41,7 +41,9 @@ Drag the new **Limitbar.app** into **Applications**, choose **Replace**, and reo
 2. Enable **Codex** in Connections. The default account folder is `~/.codex` (or `CODEX_HOME` when available to the process). Choose a different folder if your installation uses one.
 3. If macOS prompts for Keychain access, allow Limitbar to read the Codex session.
 
-The app reads the existing `auth.json` token, or the `Codex Auth` Keychain entry for that folder, and makes a read-only request to `https://chatgpt.com/backend-api/wham/usage`. It respects the top-level `cli_auth_credentials_store` setting for `file`, `keyring`, and `auto`. API-key-only logins cannot report ChatGPT subscription allowances. Expired sessions must be renewed in Codex; Limitbar does not rotate tokens or modify your auth files.
+The app reads the existing `auth.json` token, or the `Codex Auth` Keychain entry for that folder, and makes read-only requests to `https://chatgpt.com/backend-api/wham/usage` and `/wham/rate-limit-reset-credits`. It respects the top-level `cli_auth_credentials_store` setting for `file`, `keyring`, and `auto`. API-key-only logins cannot report ChatGPT subscription allowances. Expired sessions must be renewed in Codex; Limitbar does not rotate tokens or modify your auth files.
+
+Below Codex's bars, the app shows the number of available resets and the next expiration in your Mac's time zone. The count comes from the account's reported `available_count`; inventory details identify full resets and their earliest available expiration. Redeemed and expired entries do not determine that date. If details are unavailable, the count from `/usage` remains visible with “Expiration not reported.” Missing reset data is labeled “Reset availability not reported,” rather than being treated as zero. A known expiry that passes between refreshes is marked for refresh. Reset credits are displayed read-only.
 
 ### Antigravity / Argon
 
@@ -79,7 +81,7 @@ swift test
 ./scripts/build-app.sh  # macOS only
 ```
 
-`LimitbarCore` contains the parsers, read-only Codex client, and bounded CLI runner. Its tests cover separate Argon and Claude/GPT quotas, weekly-only plans, missing/disabled quotas, reset parsing, authentication failures, redirect blocking, timeouts, cancellation, and bounded subprocess output. Fixtures are synthetic and contain no account credentials.
+`LimitbarCore` contains the parsers, read-only Codex client, and bounded CLI runner. Its tests cover separate Argon and Claude/GPT quotas, weekly-only plans, missing/disabled quotas, reset-credit counts and expiration, optional inventory failures, authentication failures, redirect blocking, timeouts, cancellation, and bounded subprocess output. Fixtures are synthetic and contain no account credentials.
 
 The native app uses SwiftUI, AppKit, Security, CryptoKit, and ServiceManagement. A macOS GitHub Actions workflow runs the tests, compiles and signs the app, and uploads the ZIP on pushes to `main` and pull requests. The workflow must run before treating the macOS build as verified.
 
