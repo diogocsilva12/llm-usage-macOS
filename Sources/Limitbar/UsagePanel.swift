@@ -31,8 +31,8 @@ struct UsagePanel: View {
                     .help(model.isPinned ? "Unpin panel" : "Keep panel open")
                     .accessibilityLabel(model.isPinned ? "Unpin panel" : "Pin panel")
                 }.frame(width: PanelStyle.labelWidth)
-                Text("5 hours").frame(width: PanelStyle.metricWidth, alignment: .leading)
-                Text("Week").frame(width: PanelStyle.metricWidth, alignment: .leading)
+                Text(model.addedProviders.isEmpty ? "" : columnTitles[0]).frame(width: PanelStyle.metricWidth, alignment: .leading)
+                Text(model.addedProviders.isEmpty ? "" : columnTitles[1]).frame(width: PanelStyle.metricWidth, alignment: .leading)
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(PanelStyle.secondary)
@@ -41,9 +41,17 @@ struct UsagePanel: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(ProviderID.allCases) { id in
+                    if model.addedProviders.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Your quotas, in one place.").font(.system(size: 16, weight: .semibold))
+                            Text("Choose providers in Connections to start tracking usage.")
+                                .font(.system(size: 12)).foregroundStyle(PanelStyle.secondary)
+                            Button("Add a Provider…", action: openConnections).buttonStyle(ConnectionButtonStyle())
+                        }.padding(.vertical, 20).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    ForEach(model.addedProviders) { id in
                         provider(id)
-                        if id != ProviderID.allCases.last {
+                        if id != model.addedProviders.last {
                             Rectangle().fill(PanelStyle.line).frame(height: 1).padding(.vertical, 14)
                         }
                     }
@@ -97,19 +105,23 @@ struct UsagePanel: View {
     }
 
     private var contentHeight: CGFloat {
-        let height = ProviderID.allCases.reduce(CGFloat(0)) { total, id in
+        guard !model.addedProviders.isEmpty else { return 135 }
+        let height = model.addedProviders.reduce(CGFloat(0)) { total, id in
             if let usage = model.states[id]?.usage {
                 let sections = id == .antigravity
                     ? (usage.geminiGroups.isEmpty ? 0 : 1) + (usage.claudeAndGPTGroups.isEmpty ? 0 : 1)
                     : 1
-                return total + CGFloat(sections) * 63
-                    + CGFloat(max(0, usage.groups.count - sections)) * 56
-                    + CGFloat(max(0, sections - 1)) * 29
-                    + (id == .codex ? (usage.resetCredits.map { $0.availableCount > 0 } == true ? 43 : 25) : 0)
+                var providerHeight = CGFloat(sections) * 63
+                providerHeight += CGFloat(max(0, usage.groups.count - sections)) * 56
+                providerHeight += CGFloat(max(0, sections - 1)) * 29
+                if id == .codex { providerHeight += usage.resetCredits.map { $0.availableCount > 0 } == true ? 43 : 25 }
+                providerHeight += CGFloat(usage.notes.count) * 21
+                providerHeight += CGFloat(usage.groups.filter { [$0.primaryTitle, $0.secondaryTitle] != columnTitles }.count) * 22
+                return total + providerHeight
             }
             if case .failed? = model.states[id] { return total + 106 }
             return total + 65
-        } + 43
+        } + 14 + CGFloat(max(0, model.addedProviders.count - 1)) * 29
         return min(height, max(200, (NSScreen.main?.visibleFrame.height ?? 800) - 230))
     }
 
@@ -135,13 +147,16 @@ struct UsagePanel: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 9) {
-                    usageSection(usage, groups: usage.groups, title: id.title, subtitle: usage.subtitle, logo: .codex)
-                    ResetCreditsRow(credits: usage.resetCredits)
+                    usageSection(usage, groups: usage.groups, title: id.title, subtitle: usage.subtitle, logo: ProviderLogo(id))
+                    if id == .codex { ResetCreditsRow(credits: usage.resetCredits) }
                 }
             }
         case .disconnected:
-            connectionState(id, message: id == .codex ? "Use your ChatGPT sign-in" : "Argon, Gemini & shared limits") {
-                Button("Connect") { model.setEnabled(true, for: id) }.buttonStyle(ConnectionButtonStyle())
+            connectionState(id, message: "Tracking is off") {
+                Button("Connect") {
+                    if ProviderCatalog.definition(for: id).requiresCredential && !model.savedCredentials.contains(id) { openConnections() }
+                    else { model.setEnabled(true, for: id) }
+                }.buttonStyle(ConnectionButtonStyle())
             }
         case .loading:
             connectionState(id, message: "Reading your usage…") {
@@ -160,38 +175,62 @@ struct UsagePanel: View {
 
     private func usageSection(_ usage: ProviderUsage, groups: [QuotaGroup], title: String,
                               subtitle: String, logo: ProviderLogo) -> some View {
-        VStack(spacing: 11) {
-            if let first = groups.first {
-                HStack(alignment: .top, spacing: 12) {
-                    HStack(alignment: .top, spacing: 8) {
-                        ProviderMark(logo: logo).frame(width: 19, height: 21)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(title).font(.system(size: 14, weight: .semibold))
-                            Text(subtitle).font(.system(size: 11)).foregroundStyle(PanelStyle.secondary)
-                                .lineLimit(1).help(subtitle)
-                            TimelineView(.periodic(from: .now, by: 30)) { timeline in
-                                Text(updatedLabel(usage.updatedAt, now: timeline.date))
-                                    .font(.system(size: 10.5))
-                                    .foregroundStyle(usage.isStale(at: timeline.date) ? Color.orange : PanelStyle.muted)
-                            }
+        let titles = groups.first.map { [$0.primaryTitle, $0.secondaryTitle] } ?? ["Quota", ""]
+        return VStack(spacing: 11) {
+            if titles != columnTitles { quotaHeaders(titles) }
+            HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 8) {
+                    ProviderMark(logo: logo).frame(width: 19, height: 21)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.system(size: 14, weight: .semibold))
+                        Text(subtitle).font(.system(size: 11)).foregroundStyle(PanelStyle.secondary)
+                            .lineLimit(1).help(subtitle)
+                        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+                            Text(updatedLabel(usage.updatedAt, now: timeline.date))
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(usage.isStale(at: timeline.date) ? Color.orange : PanelStyle.muted)
                         }
-                    }.frame(width: PanelStyle.labelWidth, alignment: .leading)
-                    MetricCell(window: first.fiveHour, weekly: false)
-                    MetricCell(window: first.weekly, weekly: true)
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("\(title), \(first.name), \(subtitle)")
+                    }
+                }.frame(width: PanelStyle.labelWidth, alignment: .leading)
+                MetricCell(window: groups.first?.primary, title: titles[0])
+                if titles[1].isEmpty { Color.clear.frame(width: PanelStyle.metricWidth, height: 1) }
+                else { MetricCell(window: groups.first?.secondary, title: titles[1]) }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("\(title), \(groups.first?.name ?? "Quota"), \(subtitle)")
             ForEach(Array(groups.dropFirst())) { group in
+                if [group.primaryTitle, group.secondaryTitle] != titles { quotaHeaders([group.primaryTitle, group.secondaryTitle]) }
                 HStack(alignment: .top, spacing: 12) {
                     Text(group.name).font(.system(size: 11.5)).foregroundStyle(PanelStyle.secondary)
                         .lineLimit(2).padding(.leading, 27)
                         .frame(width: PanelStyle.labelWidth, alignment: .leading).help(group.name)
-                    MetricCell(window: group.fiveHour, weekly: false, compact: true)
-                    MetricCell(window: group.weekly, weekly: true, compact: true)
+                    MetricCell(window: group.primary, title: group.primaryTitle, compact: true)
+                    if group.secondaryTitle.isEmpty { Color.clear.frame(width: PanelStyle.metricWidth, height: 1) }
+                    else { MetricCell(window: group.secondary, title: group.secondaryTitle, compact: true) }
                 }
             }
+            ForEach(Array(usage.notes.enumerated()), id: \.offset) { _, note in
+                Text(note).font(.system(size: 11)).foregroundStyle(PanelStyle.secondary)
+                    .padding(.leading, 27).frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+    }
+
+    private var columnTitles: [String] {
+        for id in model.addedProviders {
+            guard let usage = model.states[id]?.usage else { continue }
+            let group = id == .antigravity ? orderedGeminiGroups(usage.geminiGroups).first ?? usage.claudeAndGPTGroups.first : usage.groups.first
+            if let group { return [group.primaryTitle, group.secondaryTitle] }
+        }
+        return ["5 hours", "Week"]
+    }
+
+    private func quotaHeaders(_ titles: [String]) -> some View {
+        HStack(spacing: 12) {
+            Color.clear.frame(width: PanelStyle.labelWidth, height: 1)
+            Text(titles[0]).frame(width: PanelStyle.metricWidth, alignment: .leading)
+            Text(titles[1]).frame(width: PanelStyle.metricWidth, alignment: .leading)
+        }.font(.system(size: 10, weight: .medium)).foregroundStyle(PanelStyle.secondary)
     }
 
     private func connectionState<Content: View>(_ id: ProviderID, message: String, @ViewBuilder action: () -> Content) -> some View {
@@ -259,7 +298,7 @@ private struct ResetCreditsRow: View {
 
 struct MetricCell: View {
     let window: UsageWindow?
-    let weekly: Bool
+    let title: String
     var compact = false
 
     var body: some View {
@@ -290,7 +329,7 @@ struct MetricCell: View {
         }
         .frame(width: PanelStyle.metricWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(weekly ? "Weekly usage" : "Five-hour usage")
+        .accessibilityLabel("\(title) usage")
         .accessibilityValue(window.map { "\($0.percentage) used, \(resetLabel($0.resetsAt))" } ?? "Not reported")
     }
 
@@ -299,7 +338,7 @@ struct MetricCell: View {
         if date < Date() { return "awaiting reset" }
         let formatter = DateFormatter()
         formatter.locale = .current
-        formatter.setLocalizedDateFormatFromTemplate(weekly || !Calendar.current.isDateInToday(date) ? "EEE HH:mm" : "HH:mm")
+        formatter.setLocalizedDateFormatFromTemplate(title == "Week" || !Calendar.current.isDateInToday(date) ? "EEE HH:mm" : "HH:mm")
         return "resets \(formatter.string(from: date))"
     }
 }
@@ -319,6 +358,9 @@ struct ProviderMark: View {
         case .codex: return Color(red: 0.78, green: 0.85, blue: 0.99)
         case .antigravity: return Color(red: 0.58, green: 0.58, blue: 0.98)
         case .claude: return Color(red: 0.88, green: 0.53, blue: 0.38)
+        case .copilot: return Color(red: 0.58, green: 0.80, blue: 0.98)
+        case .zai: return Color(red: 0.91, green: 0.85, blue: 0.63)
+        case .synthetic: return Color(red: 0.60, green: 0.91, blue: 0.73)
         }
     }
 }

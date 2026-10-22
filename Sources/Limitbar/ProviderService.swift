@@ -36,7 +36,38 @@ enum ProviderService {
             let report = try await CommandRunner.run(executable: executable, arguments: AntigravityUsage.arguments,
                 timeout: 60, environment: environment, guardBrowser: true)
             return try AntigravityUsage.parse(report)
+        case .claude:
+            let credentials = try await Task.detached(priority: .utility) { try readClaudeCredentials() }.value
+            try Task.checkCancellation()
+            let session = CodexClient.makeSession()
+            defer { session.invalidateAndCancel() }
+            return try await QuotaAPIClient.fetchClaude(credentials: credentials, session: session)
+        case .copilot, .zai, .synthetic:
+            let token = try await Task.detached(priority: .utility) { try ProviderKeychain.read(id) }.value
+            try Task.checkCancellation()
+            let session = CodexClient.makeSession()
+            defer { session.invalidateAndCancel() }
+            return try await QuotaAPIClient.fetch(provider: id, token: token, session: session)
         }
+    }
+
+    private static func readClaudeCredentials() throws -> ClaudeCredentials {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "Claude Code-credentials",
+            kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess, let data = item as? Data { return try ClaudeCredentials.decode(data) }
+        guard status == errSecItemNotFound else { throw UsageError.keychainDenied }
+        let directory = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
+        guard let handle = try? FileHandle(forReadingFrom: directory.appendingPathComponent(".credentials.json")) else {
+            throw UsageError.claudeNotSignedIn
+        }
+        defer { try? handle.close() }
+        return try ClaudeCredentials.decode(handle.read(upToCount: 1_048_577) ?? Data())
     }
 
     static func discoverAntigravity() -> URL? {

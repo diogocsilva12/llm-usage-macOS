@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func updateStatus() {
-        let summaries = ProviderID.allCases.map { id -> (ProviderID, String) in
+        let summaries = model.enabledProviders.map { id -> (ProviderID, String) in
             let text: String
             switch model.states[id] ?? .disconnected {
             case .loaded(let usage): text = usage.summary?.percentage ?? "—"
@@ -78,8 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         statusItem.button?.title = ""
         statusItem.button?.image = ProviderArtwork.menuBarImage(summaries: summaries)
-        statusItem.button?.toolTip = "Limitbar · Codex and Antigravity usage"
-        statusItem.button?.setAccessibilityLabel("Limitbar. " + ProviderID.allCases.map { id in
+        statusItem.button?.toolTip = model.enabledProviders.isEmpty ? "Limitbar · Add a provider in Connections" : "Limitbar · " + model.enabledProviders.map(\.title).joined(separator: ", ")
+        statusItem.button?.setAccessibilityLabel("Limitbar. " + model.enabledProviders.map { id in
             "\(id.title): \(model.states[id]?.usage?.summary?.percentage ?? "unavailable")"
         }.joined(separator: ", "))
     }

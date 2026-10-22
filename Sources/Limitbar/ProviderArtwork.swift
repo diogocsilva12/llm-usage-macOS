@@ -2,25 +2,46 @@ import AppKit
 import LimitbarCore
 
 enum ProviderLogo {
-    case codex, antigravity, claude
+    case codex, antigravity, claude, copilot, zai, synthetic
 
-    init(_ provider: ProviderID) { self = provider == .codex ? .codex : .antigravity }
+    init(_ provider: ProviderID) {
+        switch provider {
+        case .codex: self = .codex
+        case .antigravity: self = .antigravity
+        case .claude: self = .claude
+        case .copilot: self = .copilot
+        case .zai: self = .zai
+        case .synthetic: self = .synthetic
+        }
+    }
 }
 
 enum ProviderArtwork {
     static let codex = load("CodexLogo")
     static let claude = load("ClaudeLogo")
+    static let copilot = load("CopilotLogo")
+    static let zai = load("ZaiLogo")
+    static let synthetic = load("SyntheticLogo")
 
     static func image(for logo: ProviderLogo) -> NSImage {
         switch logo {
         case .codex: return codex
         case .claude: return claude
+        case .copilot: return copilot
+        case .zai: return zai
+        case .synthetic: return synthetic
         case .antigravity: return NSImage(systemSymbolName: "sparkle", accessibilityDescription: nil)!
         }
     }
 
     /// The whole menu image is a template, so icons and percentages follow the menu bar appearance.
     static func menuBarImage(summaries: [(ProviderID, String)]) -> NSImage {
+        guard !summaries.isEmpty else {
+            let image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: "Limitbar")!
+            image.size = NSSize(width: 16, height: 16)
+            image.isTemplate = true
+            return image
+        }
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .medium)
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
         let widths = summaries.map { CGFloat(16) + ceil(($0.1 as NSString).size(withAttributes: attributes).width) }

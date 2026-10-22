@@ -35,7 +35,7 @@ public enum CodexUsage {
             request.setValue(account, forHTTPHeaderField: "ChatGPT-Account-Id")
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Limitbar/1.0.2", forHTTPHeaderField: "User-Agent")
+        request.setValue("Limitbar/1.1.0", forHTTPHeaderField: "User-Agent")
         return request
     }
 

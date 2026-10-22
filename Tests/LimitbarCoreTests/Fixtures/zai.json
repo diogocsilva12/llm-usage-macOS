@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "code": 200,
+  "data": {
+    "limits": [
+      {"type": "TOKENS_LIMIT", "unit": 3, "number": 5, "usage": 1000, "currentValue": 200, "remaining": 800, "percentage": 19},
+      {"type": "TIME_LIMIT", "unit": 5, "number": 1, "usage": 100, "currentValue": 25, "percentage": 25}
+    ]
+  }
+}

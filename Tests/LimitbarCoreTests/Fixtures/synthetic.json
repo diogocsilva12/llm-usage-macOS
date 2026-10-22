@@ -1,0 +1,6 @@
+{
+  "plan": "Pro",
+  "rollingFiveHourLimit": {"limit": 1000, "requests": 200, "nextTickAt": "2026-10-22T16:00:00Z"},
+  "weeklyTokenLimit": {"percentRemaining": 0.5, "nextRegenAt": "2026-10-28T12:00:00.000Z"},
+  "search": {"hourly": {"limit": 250, "requests": 2, "renewsAt": "2026-10-22T13:00:00Z"}}
+}
